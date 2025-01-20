@@ -18,6 +18,8 @@ Then, using NPM, install the lux-ai program :
 npm install -g @lux-ai/2021-challenge@latest
 ```
 
+## Build
+
 Compile using cmake
 ```shell
 cmake --build
