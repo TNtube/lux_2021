@@ -22,7 +22,7 @@ npm install -g @lux-ai/2021-challenge@latest
 
 Compile using cmake
 ```shell
-cmake --build
+cmake --build lux_2021
 ```
 
 If you don't want to use CMake, you can run
