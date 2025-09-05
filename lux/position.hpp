@@ -51,6 +51,8 @@ namespace lux
                 return Position(x - units, y);
             case DIRECTIONS::CENTER:
                 return Position(x, y);
+            default:
+                return Position(x, y);
             }
         }
 
