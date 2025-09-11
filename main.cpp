@@ -1,4 +1,6 @@
 #include "utils.h"
+#include "unitManager.h"
+#include "cityManager.h"
 #include "lux/define.cpp"
 
 using namespace std;
@@ -26,26 +28,10 @@ int main()
 
 		vector<Cell *> resourceTiles = getRessourcesTiles(gameMap);
 
-		// we iterate over all our units and do something with them
-		for (int i = 0; i < player.units.size(); i++)
-		{
-			Unit unit = player.units[i];
-			if (unit.isWorker() && unit.canAct())
-			{
-				DIRECTIONS direction = DIRECTIONS::CENTER;
-				if (unit.getCargoSpaceLeft() > 0)
-				{
-					Cell *closestResourceTile = getClosestRessourceOfType(resourceTiles, unit, ResourceType::wood);
-					if (closestResourceTile != nullptr)
-						direction = unit.pos.directionTo(closestResourceTile->pos);
-				}
-				else if (CityTile* closestCityTile = getClosestCityTile(player, unit);
-					closestCityTile != nullptr)
-					direction = unit.pos.directionTo(closestCityTile->pos);
+		GameContext gameContext{player,gameMap,actions,resourceTiles};
 
-				actions.push_back(unit.move(direction));
-			}
-		}
+		UnitManager(gameContext).processUnits();
+		CityManager(gameContext).processCities();
 
 		/** AI Code Goes Above! **/
 
