@@ -1,7 +1,7 @@
 #include "unitManager.h"
 #include <iostream>
+#include <unordered_set>
 
-using namespace std;
 using namespace lux;
 
 UnitManager::UnitManager(GameContext& gameContext):
@@ -10,32 +10,33 @@ UnitManager::UnitManager(GameContext& gameContext):
 
 void UnitManager::processUnits()
 {
+    // Clean up reservations for units that no longer exist
+    cleanupReservations();
+
     Player& player = m_gameContext.player;
-    vector<string>& actions = m_gameContext.actions;
+    std::vector<string>& actions = m_gameContext.actions;
 
     for (int i = 0; i < player.units.size(); i++)
     {
         Unit& unit = player.units[i];
 
-        // Ne traiter que les Workers qui peuvent agir
         if (unit.isWorker() && unit.canAct())
         {
-            DIRECTIONS direction = DIRECTIONS::CENTER;
+            DIRECTIONS direction = CENTER;
 
             if (unit.getCargoSpaceLeft() > 0)
                 collectRessource(unit, direction);
             else
             {
-                // Vérifier si on a autant d'unités que de CityTiles
                 if ((int)player.units.size() >= player.cityTileCount)
-                    buildNewCity(unit,direction);
+                    buildNewCity(unit, direction);
                 else if (CityTile* closestCityTile = getClosestCityTile(player, unit);
                     closestCityTile != nullptr)
-                    direction = unit.pos.directionTo(closestCityTile->pos);
+                    direction = travelToward(unit, closestCityTile->pos);
             }
 
-            // Envoyer le mouvement
-            actions.push_back(unit.move(direction));
+            if (direction != CENTER)
+                actions.push_back(unit.move(direction));
         }
     }
 }
@@ -54,7 +55,7 @@ void UnitManager::buildNewCity(Unit& unit, DIRECTIONS& direction)
     if (closestCityTile != nullptr)
     {
         // Trouver une tuile adjacente vide pour construire une ville
-        vector<Cell*> adj = getAdjacentCells(closestCityTile->pos);
+        std::vector<Cell*> adj = getAdjacentCells(closestCityTile->pos);
         for (Cell* cell : adj)
         {
             if (cell->citytile == nullptr && !cell->hasResource())
@@ -80,28 +81,31 @@ void UnitManager::buildNewCity(Unit& unit, DIRECTIONS& direction)
 
 DIRECTIONS UnitManager::travelToward(Unit& unit, const Position& dest)
 {
-    if(m_reservedDestinations.contains(unit.pos))
-        m_reservedDestinations.erase(unit.pos);
+    // Clear old reservation if unit is moving to a new destination
+    if (m_unitDestinations.find(unit.id) != m_unitDestinations.end()
+        && m_unitDestinations[unit.id] != dest)
+    {
+        clearUnitReservation(unit.id);
+    }
 
-    debugReservedDestinations();
+    m_unitDestinations[unit.id] = dest;
 
-    Position nextPos = unit.pos.translate(unit.pos.directionTo(dest), 1);
-    if(m_reservedDestinations.contains(nextPos) && m_reservedDestinations[nextPos] != &unit)
-        return DIRECTIONS::CENTER;
+    // Try to find a path
+    DIRECTIONS bestDirection = findBestDirection(unit, dest);
 
-    cerr << "OOOOOOOOOOOOOOOOOOOO" << endl;
+    if (bestDirection != CENTER)
+    {
+        Position nextPos = unit.pos.translate(bestDirection, 1);
+        m_reservedDestinations[nextPos] = unit.id;
+    }
 
-    debugReservedDestinations();
-
-    m_reservedDestinations[nextPos] = &unit;
-
-    return unit.pos.directionTo(dest);
+    return bestDirection;
 }
 
 // Retourne un vecteur de pointeurs vers les cases adjacentes orthogonales
-vector<Cell*> UnitManager::getAdjacentCells(const Position& pos)
+std::vector<Cell*> UnitManager::getAdjacentCells(const Position& pos)
 {
-    vector<Cell*> adj;
+    std::vector<Cell*> adj;
 
     // Raccourci vers la carte
     GameMap& gameMap = m_gameContext.gameMap;
@@ -124,25 +128,102 @@ vector<Cell*> UnitManager::getAdjacentCells(const Position& pos)
 }
 
 
-#include <iostream>
+void UnitManager::cleanupReservations() {
+    Player& player = m_gameContext.player;
+    std::unordered_set<std::string> validUnitIds;
+
+    // Collect all valid unit IDs
+    for (const auto& unit : player.units)
+        validUnitIds.insert(unit.id);
+
+    // Remove reservations for invalid units
+    for (auto it = m_reservedDestinations.begin(); it != m_reservedDestinations.end();)
+    {
+        if (validUnitIds.find(it->second) == validUnitIds.end())
+            it = m_reservedDestinations.erase(it);
+        else
+            ++it;
+    }
+
+    // Clean unit destinations
+    for (auto it = m_unitDestinations.begin(); it != m_unitDestinations.end();)
+    {
+        if (validUnitIds.find(it->first) == validUnitIds.end())
+            it = m_unitDestinations.erase(it);
+        else
+            ++it;
+    }
+}
+
+void UnitManager::clearUnitReservation(const std::string& unitId)
+{
+    // Find and remove reservation made by this unit
+    for (auto it = m_reservedDestinations.begin(); it != m_reservedDestinations.end(); ++it)
+    {
+        if (it->second == unitId)
+        {
+            m_reservedDestinations.erase(it);
+            break;
+        }
+    }
+}
+
+DIRECTIONS UnitManager::findBestDirection(const lux::Unit &unit, lux::Position dest)
+{
+    std::vector directions = {
+        NORTH, EAST,
+        SOUTH, WEST
+    };
+
+    DIRECTIONS bestDir = CENTER;
+    float bestScore = -1;
+
+    for (DIRECTIONS dir : directions)
+    {
+        Position nextPos = unit.pos.translate(dir, 1);
+
+        // Check bounds
+        if (nextPos.x < 0 || nextPos.x >= m_gameContext.gameMap.width ||
+            nextPos.y < 0 || nextPos.y >= m_gameContext.gameMap.height)
+            continue;
+
+        // Check if position is reserved by another unit
+        if (m_reservedDestinations.find(nextPos) != m_reservedDestinations.end() &&
+            m_reservedDestinations[nextPos] != unit.id)
+            continue;
+
+        // Calculate score (distance to destination, with some randomness to avoid deadlocks)
+        float score = 1.0f / (nextPos.distanceTo(dest) + 0.1f);
+        score += (rand() % 100) / 10000.0f; // Small random factor
+
+        if (score > bestScore)
+        {
+            bestScore = score;
+            bestDir = dir;
+        }
+    }
+
+    return bestDir;
+}
 
 // Debug print for reserved destinations
 void UnitManager::debugReservedDestinations() const
 {
-    std::cerr << "---- Reserved Destinations ----" << std::endl;
-    for (const auto& [pos, unit] : m_reservedDestinations)
-    {
-        std::cerr << "Pos(" << pos.x << "," << pos.y << ")";
-        if (unit)
-        {
-            std::cerr << " <- Unit " << unit->id
-                      << " at (" << unit->pos.x << "," << unit->pos.y << ")";
-        }
-        else
-        {
-            std::cerr << " <- nullptr";
-        }
-        std::cerr << std::endl;
-    }
-    std::cerr << "-------------------------------" << std::endl;
+    // std::cerr << "---- Reserved Destinations ----" << std::endl;
+    // for (const auto& [pos, unitId] : m_reservedDestinations)
+    // {
+    //     auto unit = m_gameContext.
+    //     std::cerr << "Pos(" << pos.x << "," << pos.y << ")";
+    //     if (unit)
+    //     {
+    //         std::cerr << " <- Unit " << unit->id
+    //                   << " at (" << unit->pos.x << "," << unit->pos.y << ")";
+    //     }
+    //     else
+    //     {
+    //         std::cerr << " <- nullptr";
+    //     }
+    //     std::cerr << std::endl;
+    // }
+    // std::cerr << "-------------------------------" << std::endl;
 }

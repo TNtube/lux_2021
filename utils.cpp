@@ -15,17 +15,19 @@ vector<Cell *> getRessourcesTiles(GameMap& gameMap)
 
 Cell* getClosestRessourceOfType(vector<Cell*>& resourceTiles, Unit& unit, ResourceType type)
 {
-	Cell *closestResourceTile;
-	float closestDist = 9999999;
+	Cell* closestResourceTile = nullptr;
+	float closestDist = std::numeric_limits<float>::max();
+
 	for (Cell* cell: resourceTiles)
 	{
 		if (cell->resource.type != type) continue;
 
 		float dist = cell->pos.distanceTo(unit.pos);
-		if (dist >= closestDist) continue;
-
-		closestDist = dist;
-		closestResourceTile = cell;
+		if (dist < closestDist)
+		{
+			closestDist = dist;
+			closestResourceTile = cell;
+		}
 	}
 	return closestResourceTile;
 }

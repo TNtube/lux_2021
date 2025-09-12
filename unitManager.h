@@ -16,12 +16,19 @@ public:
 	void processUnits();
 	void collectRessource(lux::Unit& unit, lux::DIRECTIONS& direction);
 	void buildNewCity(lux::Unit& unit, lux::DIRECTIONS& direction);
+
 	lux::DIRECTIONS travelToward(lux::Unit& unit, const lux::Position& dest);
 	std::vector<lux::Cell*> getAdjacentCells(const lux::Position& pos);
 	
 private:
 	GameContext& m_gameContext;
-	std::unordered_map<lux::Position, lux::Unit*, PositionHash> m_reservedDestinations;
+	std::unordered_map<lux::Position, std::string, PositionHash> m_reservedDestinations;
+	std::unordered_map<std::string, lux::Position> m_unitDestinations;
+
+	void cleanupReservations();
+	void clearUnitReservation(const std::string & unitId);
+
+	lux::DIRECTIONS findBestDirection(const lux::Unit & unit, lux::Position dest);
 
 	void debugReservedDestinations() const;
 };
