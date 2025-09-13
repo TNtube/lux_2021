@@ -1,14 +1,6 @@
 #pragma once
 #include "utils.h"
 
-struct PositionHash
-{
-    std::size_t operator()(const lux::Position& pos) const noexcept
-    {
-        return std::hash<int>()(pos.x) ^ (std::hash<int>()(pos.y) << 1);
-    }
-};
-
 class UnitManager
 {
 public:
@@ -22,7 +14,6 @@ public:
 	
 private:
 	GameContext& m_gameContext;
-	std::unordered_map<lux::Position, std::string, PositionHash> m_reservedDestinations;
 	std::unordered_map<std::string, lux::Position> m_unitDestinations;
 
 	void cleanupReservations();

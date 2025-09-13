@@ -2,6 +2,7 @@
 #include "unitManager.h"
 #include "cityManager.h"
 #include "lux/define.cpp"
+#include <iostream>
 
 using namespace std;
 using namespace lux;

@@ -14,6 +14,6 @@ void CityManager::processCities()
 
 	for (auto& kv : player.cities)
 		for (auto& cityTile : kv.second.citytiles)
-			if (cityTile.canAct() && (int)player.units.size() < player.cityTileCount)
+			if (cityTile.canAct() && (int)player.units.size() < player.cityTileCount && !m_gameContext.reservedDestinations.contains(cityTile.pos))
 				actions.push_back(cityTile.buildWorker());
 }
